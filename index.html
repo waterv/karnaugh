@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta lang="zh-CN">
+        <title>Karnaugh Map Simplifier</title>
+        <link rel="stylesheet" href="katex.min.css">
+        <style>
+            body { user-select: none; }
+
+            .cols { width: 100%; }
+            .cols div {
+                display: inline-block;
+                vertical-align: top;
+            }
+
+            button {
+                height: 30px;
+            }
+
+            .karnaugh { border: none; }
+            .karnaugh td {
+                padding: 0;
+                border: none;
+                text-align: center;
+            }
+            .karnaugh button {
+                width: 50px;
+                height: 50px;
+                border: none;
+                font-size: 1em;
+            }
+
+            .truth {
+                margin: auto;
+                border-collapse: collapse;
+            }
+            .truth td {
+                width: 40px;
+                height: 30px;
+                border: 1px solid gray;
+                text-align: center;
+            }
+            .truth button {
+                width: 40px;
+                height: 30px;
+                border: none;
+                font-size: 1em;
+            }
+
+            .cell-0 { background-color: lightsteelblue; }
+            .cell-1 { background-color: aquamarine; }
+            .cell-2 { background-color: khaki; }
+            .hover { background-color: darksalmon; }
+            .hover button { background-color: darksalmon; }
+            .term:hover { background-color: lightsalmon; }
+        </style>
+    </head>
+    <body>
+        <h2>卡诺图化简器 <small>Version 1.0.0</small></h2>
+        <ul>
+            <li>点击下方真值表右侧的真值，或卡诺图上的单元格，以改变最小项状态；</li>
+            <ul>
+                <li><span class="cell-0">&emsp;</span> 假 / $0$ / False</li>
+                <li><span class="cell-1">&emsp;</span> 真 / $1$ / True</li>
+                <li><span class="cell-2">&emsp;</span> 无关项 / $\varphi$ / Don't Care</li>
+            </ul>
+            <li>将鼠标移动到表达式的某一项 / 因式上，以 <span class="hover">&emsp;</span> 高亮显示「对应的最小项」所对应的真值表中的行，和卡诺图上的单元格。</li>
+            <ul>
+                <li>「对应的最小项」指的是 SOP 中该项包含的最小项，或者 POS 中该因式不包含的最小项。</li>
+            </ul>
+            <li>本工具所得到的化简结果可能并非最简，尤其是当无关项太多时，此时减少无关项或者修改设置选项可能会使结果得到一定的化简。</li>
+            <li><strong>本工具仅供学习参考之用。</strong></li>
+        </ul>
+        <div class="cols">
+            <div id="row-1"></div>
+            <div id="row-2">
+                <p>
+                    <button id="all-1">全部设为 $1$</button>
+                    <button id="all-0">全部设为 $0$</button>
+                    <button id="all-2">全部设为 $\varphi$</button>
+                </p>
+                <ul>
+                    <li>化简方式：</li>
+                    <ul>
+                        <li>
+                            <input id="SOP" type="radio" name="exprtype" value="SOP" checked />
+                            <label for="SOP">积之和 (Sum of Product, SOP)</label>
+                        </li>
+                        <li>
+                            <input id="POS" type="radio" name="exprtype" value="POS" />
+                            <label for="POS">和之积 (Product of Sum, POS)</label>
+                        </li>
+                    </ul>
+                    <li>无关项的默认值：</li>
+                    <ul>
+                        <li>
+                            <input id="Care" type="radio" name="caretype" value="true" checked />
+                            <label for="Care">1 (SOP) / 0 (POS)</label>
+                        </li>
+                        <li>
+                            <input id="DontCare" type="radio" name="caretype" value="false" />
+                            <label for="DontCare">0 (SOP) / 1 (POS)</sup></label>
+                        </li>
+                    </ul>
+                    <li>化简算法：</li>
+                    <ul>
+                        <li>
+                            <input id="QM" type="radio" name="algotype" value="QM" />
+                            <label for="QM">Quine-McCluskey 算法</label>
+                        </li>
+                        <li>
+                            <input id="QMP" type="radio" name="algotype" value="QMP" checked />
+                            <label for="QMP">Quine-McCluskey 算法 + 素项表化简</label>
+                        </li>
+                    </ul>
+                </ul>
+                <p>化简后的表达式：<span id='result'></span></p>
+            </div>
+        </div>
+    </body>
+    <script src="karnaugh.js"></script>
+    <script src="katex.min.js"></script>
+    <script src="auto-render.min.js"></script>
+    <script>
+        // 引入 KaTeX
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+              delimiters: [
+                  {left: '$', right: '$', display: false}
+              ],
+              throwOnError : false
+            });
+        });
+
+        // 初始设置
+        let kar = new karnaugh();
+        let cells = [0, 1, 3, 2, 4, 5, 7, 6, 12, 13, 15, 14, 8, 9, 11, 10];
+        let cols = ["\\overline{CD}", "\\overline CD", "CD", "C\\overline D"];
+        let rows = ["\\overline{AB}","\\overline AB", "AB", "A\\overline B"];
+        let truthValue = ["0", "1", "\\varphi"];
+        let status = new Array();
+        for (i in cells)
+            status[i] = 0;
+
+        // 设置项
+        let POS = false;
+        let Care = true;
+        let Prim = true;
+
+        // 生成页面内容
+        // 卡诺图表格
+        let ktable = "<table class='karnaugh'><tr><td></td>";
+        for (let i of cols)
+            ktable += `<td>$${i}$</td>`;
+        for (let i = 0; i < 4; i ++) {
+            ktable += `</tr><tr><td>$${rows[i]}$</td>`;
+            for (let j = 0; j < 4; j ++)
+                ktable += `<td><button class="cell-0" id="${cells[i * 4 + j]}">$m_{${cells[i * 4 + j]}}$</button></td>`;
+        }
+        ktable += "</tr></table>";
+        
+        // 真值表
+        let ttable = "<table class='truth'><tr><th></th>";
+        for (let i = 0; i < 4; i ++)
+            ttable += `<th>$${kar.chars[i]}$</th>`;
+        ttable += "<th>真值</th>";
+        for (let i = 0; i < 16; i ++) {
+            ttable += `</tr><tr class="truth-row"><td>$m_{${i}}$</td>`;
+            let bits = kar.binaryify(i);
+            for (let j = 0; j < 4; j ++)
+                ttable += `<td>$${bits[j]}$</td>`;
+            ttable += `<td><button class="cell-0" id="r-${i}">$0$</button></td>`;
+        }
+        ttable += "</tr></table>";
+
+        // 操作按钮
+        document.getElementById("row-1").innerHTML = ttable;
+        document.getElementById("row-2").innerHTML = ktable + document.getElementById("row-2").innerHTML;
+        for (let i = 0; i < 3; i ++) {
+            document.getElementById(`all-${i}`).addEventListener("click", () => {
+                for (let j = 0; j < 16; j ++) 
+                    change(j, i);
+                update();
+            });
+        }
+
+        for (let i = 0; i < 16; i ++) {
+            let event = () => {
+                change(i, (status[i] + 1) % 3);
+                update();
+            };
+            document.getElementById(`${i}`).addEventListener("click", event);
+            document.getElementById(`r-${i}`).addEventListener("click", event);
+        }
+
+        function change(index, state) {
+            status[index] = state;
+            document.getElementById(`${index}`).classList = `cell-${state}`;
+            document.getElementById(`r-${index}`).classList = `cell-${state}`;
+            katex.render(
+                `${truthValue[state]}`, 
+                document.getElementById(`r-${index}`), {
+                throwOnError: false
+            });
+        }
+
+        document.getElementById("SOP").addEventListener("click", function () {
+            if (this.checked) { POS = false; update(); }
+        });
+        document.getElementById("POS").addEventListener("click", function () {
+            if (this.checked) { POS = true; update(); }
+        });
+        document.getElementById("Care").addEventListener("click", function () {
+            if (this.checked) { Care = true; update(); }
+        });
+        document.getElementById("DontCare").addEventListener("click", function () {
+            if (this.checked) { Care = false; update(); }
+        });
+        document.getElementById("QM").addEventListener("click", function () {
+            if (this.checked) { Prim = false; update(); }
+        });
+        document.getElementById("QMP").addEventListener("click", function () {
+            if (this.checked) { Prim = true; update(); }
+        });
+
+        function update() {
+            let ones = new Set();
+            let dontcares = new Set();
+            for (let i = 0; i < status.length; i ++) {
+                if (POS && status[i] == 0) ones.add(i);
+                if (!POS && status[i] == 1) ones.add(i);
+                if (Care && status[i] == 2) dontcares.add(i);
+            }
+            // 渲染表达式
+            let terms;
+            if (Prim) terms = kar.simplify_prime(ones, dontcares);
+            else terms = kar.simplify(ones, dontcares);
+            document.getElementById("result").innerHTML = "";
+            if (terms.length == 0) {
+                document.getElementById("result").innerHTML = '<span class="term" id="t-" data=""></span>'
+                katex.render(POS ? "1" : "0", document.getElementById("t-"), {
+                    throwOnError: false
+                });
+            } else terms.forEach((item, index) => {
+                document.getElementById("result").innerHTML += 
+                    `<span class="term" id="t-${item}" data="${item}"></span>`;
+                let termDom = document.getElementById(`t-${item}`);
+                katex.render(
+                    POS ? ((index > 0 ? "\\cdot" : "") + kar.termify_POS(item)) :
+                          ((index > 0 ? "+" : "") + kar.termify(item)),
+                    termDom, {
+                        throwOnError: false
+                    }
+                );
+            });
+            // 绑定「悬浮高亮显示」事件
+            let doms = document.getElementsByClassName("term");
+            for (let i = 0; i < doms.length; i ++) {
+                doms[i].addEventListener("mouseover", function () {
+                    let terms = kar.minimumTermify(this.getAttribute("data"));
+                    terms.forEach(term => {
+                        document.getElementById(term).classList.add("hover");
+                        document.getElementsByClassName("truth-row")[term].classList.add("hover");
+                    });
+                });
+                doms[i].addEventListener("mouseout", function () {
+                    let terms = kar.minimumTermify(this.getAttribute("data"));
+                    terms.forEach(term => {
+                        document.getElementById(term).classList.remove("hover");
+                        document.getElementsByClassName("truth-row")[term].classList.remove("hover");
+                    });
+                });
+            }
+        }
+    </script>
+</html>
