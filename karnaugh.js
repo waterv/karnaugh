@@ -45,7 +45,7 @@ class karnaugh {
         let index = 0;
         let str = "";
         for (let i = 0; i < bits.length; i ++) {
-            if (bits[i] == "0") str += "\\overline ";
+            if (bits[i] == "0") str += "\\bar ";
             if (bits[i] != "-") str += this.chars[index];
             index += 1;
         }
@@ -56,7 +56,7 @@ class karnaugh {
         let str = "";
         for (let i = 0; i < bits.length; i ++) {
             if (str.length && bits[i] != "-") str += "+";
-            if (bits[i] == "1") str += "\\overline ";
+            if (bits[i] == "1") str += "\\bar ";
             if (bits[i] != "-") str += this.chars[index];
             index += 1;
         }
