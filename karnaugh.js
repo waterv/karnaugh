@@ -1,6 +1,6 @@
 class karnaugh {
     MaxLength = 4;
-    MaxNumber = 16;               // 2 ^ MaxLength
+    MaxNumber = 16;                         // 2 ^ MaxLength
     chars = ["A", "B", "C", "D", "E", "F"]; // chars.length = MaxLength
 
     // Input:  二进制码 (String)
